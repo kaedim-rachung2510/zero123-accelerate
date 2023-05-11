@@ -1,3 +1,5 @@
+import torch
+
 from ldm.modules.encoders.modules import FrozenCLIPImageEmbedder
 from clip.model import CLIP
 
