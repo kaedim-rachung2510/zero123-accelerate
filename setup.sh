@@ -14,9 +14,9 @@ pin_and_add_path() {
 
 # Add submodules to PYTHONPATH. Pin to specific commits.
 pin_and_add_path "zero123" "78bc429"
-pin_and_add_path "taming-transformers" "3ba01b241669f5ade541ce990f7650a3b8f65318"
-pin_and_add_path "CLIP" "a9b1bf5920416aaeaec965c25dd9e8f98c864f16"
-pin_and_add_path "image-background-remove-tool" "2935e4655d2c0260195e22ac08af6c43b5969fdd"
+pin_and_add_path "taming-transformers" "3ba01b2"
+pin_and_add_path "CLIP" "a9b1bf5"
+pin_and_add_path "image-background-remove-tool" "2935e46"
 
 # A single requirements file for all the submodules
 pip install -r requirements.txt
