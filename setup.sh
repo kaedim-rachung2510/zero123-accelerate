@@ -14,12 +14,15 @@ pin_and_add_path() {
 }
 
 
-
 # Add submodules to PYTHONPATH. Pin to specific commits.
 pin_and_add_path "zero123" "78bc429"
 pin_and_add_path "taming-transformers" "3ba01b2"
 pin_and_add_path "CLIP" "a9b1bf5"
 pin_and_add_path "image-background-remove-tool" "2935e46"
+# An additional path, to get to the vendored ldm code
+zero123_path=$(echo $PYTHONPATH | awk -F: '{print $NF}')
+export PYTHONPATH="${PYTHONPATH}:${zero123_path}/zero123"
+
 
 # A single requirements file for all the submodules
 pip install -r requirements.txt
