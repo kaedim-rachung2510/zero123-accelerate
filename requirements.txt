@@ -3,7 +3,7 @@ ftfy==6.1.1
 einops==0.6.1
 kornia==0.6.12
 omegaconf==2.3.0
-pytorch-lightning==1.6.5
+pytorch-lightning==2.0.0
 torch==2.0.0
 transformers==4.29.0
 
