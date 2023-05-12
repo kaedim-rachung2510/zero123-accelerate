@@ -6,6 +6,7 @@ python gradio_new.py 0
 
 from accelerate import init_empty_weights, load_checkpoint_and_dispatch
 import math
+import os
 import fire
 import gradio as gr
 import numpy as np
@@ -482,10 +483,13 @@ def calc_cam_cone_pts_3d(polar_deg, azimuth_deg, radius_m, fov_deg):
 
 def run_demo(
         device=None,
-        ckpt='105000.ckpt',
-        device_map='auto'):
+        ckpt='./checkpoints',
+        device_map=None,
+        share=True):
     if not device:
-        device = f'cuda:{_GPU_INDEX}'
+      device = f'cuda:{_GPU_INDEX}'
+    if os.path.isfile(device_map):
+      device_map = omegaconf.OmegaConf.load(device_map)
 
     # Instantiate all models beforehand for efficiency.
     models = dict()
@@ -666,15 +670,8 @@ def run_demo(
                                     0.0, 180.0, 0.0),
                          inputs=preset_inputs, outputs=preset_outputs)
 
-    demo.launch(enable_queue=True, debug=True)
+    demo.launch(enable_queue=True)
 
 
 if __name__ == '__main__':
-    fire.Fire(
-        run_demo,
-        {
-            'device': None,
-            'ckpt': '/content/zero123-accelerate/checkpoints',
-            'device_map': omegaconf.OmegaConf.load('./config/device_map.yml')
-        }
-    )
+    fire.Fire(run_demo)
