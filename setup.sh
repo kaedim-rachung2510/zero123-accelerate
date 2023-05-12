@@ -31,6 +31,6 @@ pip install -r requirements.txt
 # make zero123's ldm source compatible with newer versions of lightning
 (cd ./zero123/zero123/ldm/models/diffusion && patch < ../../../../../patches/ldm_ddpm.patch)
 # compatibility with newer PIL
-(cd ./zero123/zero123/ldm/models/diffusion && patch < ../../../../../patches/ldm_util.patch)
+(cd ./zero123/zero123/ldm && patch < ../../../patches/ldm_util.patch)
 
 echo $PYTHONPATH
