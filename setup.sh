@@ -26,11 +26,11 @@ export PYTHONPATH="${PYTHONPATH}:${zero123_path}/zero123"
 # One requirements file to rule them all
 pip install -r requirements.txt
 
-# Patching existing code - don't fork or vendor to change just a couple of lines of code
+# Patching existing code - don't fork or vendor just for a couple of lines
 #
-# make zero123's ldm source compatible with newer versions of lightning
+# Make zero123's ldm source compatible with newer versions of lightning
 (cd ./zero123/zero123/ldm/models/diffusion && patch < ../../../../../patches/ldm_ddpm.patch)
-# compatibility with newer PIL
+# Compatibility with newer PIL
 (cd ./zero123/zero123/ldm && patch < ../../../patches/ldm_util.patch)
 
 echo $PYTHONPATH
