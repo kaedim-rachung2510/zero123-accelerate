@@ -61,30 +61,6 @@ def load_zero123_ld(
     return model
 
 
-def hiinterface_to(hiinterface, device: Literal['cpu', 'cuda']):
-    hiinterface.u2net.to(device)
-    hiinterface.u2net.device = device
-
-    hiinterface.fba.to(device)
-    hiinterface.fba.device = device
-
-    hiinterface.device = device
-
-
-class device_switch:
-    def __init__(self, model, device_enter, device_exit):
-        self.model = model
-        self.device_enter = device_enter
-        self.device_exit = device_exit
-
-    def __enter__(self):
-        self.model.to(self.device_enter)
-        return self.model
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.model.to(self.device_exit)
-
-
 @torch.no_grad()
 def sample_model(input_im, model, sampler, precision, h, w, ddim_steps, n_samples, scale,
                  ddim_eta, x, y, z):
