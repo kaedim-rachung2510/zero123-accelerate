@@ -4,18 +4,12 @@ cd zero123
 python gradio_new.py 0
 '''
 
-import diffusers  # 0.12.1
+from accelerate import init_empty_weights, load_checkpoint_and_dispatch
 import math
 import fire
 import gradio as gr
-import lovely_numpy
-import lovely_tensors
 import numpy as np
-import os
-import plotly.express as px
 import plotly.graph_objects as go
-import rich
-import sys
 import time
 import torch
 from contextlib import nullcontext
@@ -25,16 +19,16 @@ from functools import partial
 from ldm.models.diffusion.ddim import DDIMSampler
 from ldm.util import create_carvekit_interface, load_and_preprocess, instantiate_from_config
 from lovely_numpy import lo
-from omegaconf import OmegaConf
+import omegaconf
 from PIL import Image
 from rich import print
 from transformers import AutoFeatureExtractor
 from torch import autocast
 from torchvision import transforms
 from typing import Literal
-import kornia
 
 from ldm.models.diffusion.ddpm import LatentDiffusion
+
 
 _SHOW_DESC = True
 _SHOW_INTERMEDIATE = False
@@ -54,117 +48,15 @@ Note that this model is not intended for images of humans or faces, and is unlik
 
 _ARTICLE = 'See uses.md'
 
-from accelerate import init_empty_weights, load_checkpoint_and_dispatch
-
-
-# import ldm.models.diffusion.ddpm.LatentDiffusion
-
-def load_model_from_config(config, ckpt, device, verbose=False):
-    print(f'Loading model from {ckpt}')
-    pl_sd = torch.load(ckpt, map_location='cpu')
-    if 'global_step' in pl_sd:
-        print(f'Global Step: {pl_sd["global_step"]}')
-    sd = pl_sd['state_dict']
-    model = instantiate_from_config(config.model)
-    m, u = model.load_state_dict(sd, strict=False)
-    if len(m) > 0 and verbose:
-        print('missing keys:')
-        print(m)
-    if len(u) > 0 and verbose:
-        print('unexpected keys:')
-        print(u)
-
-    model.to(device)
-    model.eval()
-    return model
-
-
 def load_zero123_ld(
-        state_dict_path='/kaggle/input/zero-123-sharded-1gb',
-        config=None,
+        state_dict_path='./checkpoints',
+        config_path='./config/latent_diffusion.yml',
         **kwargs
 ):
-    """The underlying model is adapted so it doesn't necessarily pull pretrained state dicts, governed by from_pretrained in the config."""
-    # TODO: signatures and args passing are meh
-    if not config:
-        # config for the model, Zero123 repo, extracted on May 1st 2023:
-        config = {'model': {'base_learning_rate': 0.0001, 'target': 'ldm.models.diffusion.ddpm.LatentDiffusion',
-                            'params': {'linear_start': 0.00085, 'linear_end': 0.012, 'num_timesteps_cond': 1,
-                                       'log_every_t': 200, 'timesteps': 1000, 'first_stage_key': 'image_target',
-                                       'cond_stage_key': 'image_cond', 'image_size': 32, 'channels': 4,
-                                       'cond_stage_trainable': False, 'conditioning_key': 'hybrid',
-                                       'monitor': 'val/loss_simple_ema', 'scale_factor': 0.18215,
-                                       'scheduler_config': {'target': 'ldm.lr_scheduler.LambdaLinearScheduler',
-                                                            'params': {'warm_up_steps': [100],
-                                                                       'cycle_lengths': [10000000000000],
-                                                                       'f_start': [1e-06], 'f_max': [1.0],
-                                                                       'f_min': [1.0]}},
-                                       'unet_config': {'target': 'ldm.modules.diffusionmodules.openaimodel.UNetModel',
-                                                       'params': {'image_size': 32, 'in_channels': 8, 'out_channels': 4,
-                                                                  'model_channels': 320,
-                                                                  'attention_resolutions': [4, 2, 1],
-                                                                  'num_res_blocks': 2, 'channel_mult': [1, 2, 4, 4],
-                                                                  'num_heads': 8, 'use_spatial_transformer': True,
-                                                                  'transformer_depth': 1, 'context_dim': 768,
-                                                                  'use_checkpoint': True, 'legacy': False}},
-                                       'first_stage_config': {'target': 'ldm.models.autoencoder.AutoencoderKL',
-                                                              'params': {'embed_dim': 4, 'monitor': 'val/rec_loss',
-                                                                         'ddconfig': {'double_z': True, 'z_channels': 4,
-                                                                                      'resolution': 256,
-                                                                                      'in_channels': 3, 'out_ch': 3,
-                                                                                      'ch': 128,
-                                                                                      'ch_mult': [1, 2, 4, 4],
-                                                                                      'num_res_blocks': 2,
-                                                                                      'attn_resolutions': [],
-                                                                                      'dropout': 0.0}, 'lossconfig': {
-                                                                      'target': 'torch.nn.Identity'}}},
-                                       'cond_stage_config': {
-                                           'target': 'ldm.modules.encoders.modules.FrozenCLIPImageEmbedder'}}},
-                  'data': {'target': 'ldm.data.simple.ObjaverseDataModuleFromConfig',
-                           'params': {'root_dir': 'views_whole_sphere', 'batch_size': 192, 'num_workers': 16,
-                                      'total_view': 4,
-                                      'train': {'validation': False, 'image_transforms': {'size': 256}},
-                                      'validation': {'validation': True, 'image_transforms': {'size': 256}}}},
-                  'lightning': {'find_unused_parameters': False, 'metrics_over_trainsteps_checkpoint': True,
-                                'modelcheckpoint': {'params': {'every_n_train_steps': 5000}}, 'callbacks': {
-                          'image_logger': {'target': 'main.ImageLogger',
-                                           'params': {'batch_frequency': 500, 'max_images': 32,
-                                                      'increase_log_steps': False, 'log_first_step': True,
-                                                      'log_images_kwargs': {'use_ema_scope': False, 'inpaint': False,
-                                                                            'plot_progressive_rows': False,
-                                                                            'plot_diffusion_rows': False, 'N': 32,
-                                                                            'unconditional_guidance_scale': 3.0,
-                                                                            'unconditional_guidance_label': ['']}}}},
-                                'trainer': {'benchmark': True, 'val_check_interval': 5000000, 'num_sanity_val_steps': 0,
-                                            'accumulate_grad_batches': 1}}}
-        # The following entry is here to avoid loading pretrained model weights
-        clip_args = {
-            'embed_dim': 768,
-            'image_resolution': 224,
-            'vision_layers': 24,
-            'vision_width': 1024,
-            'vision_patch_size': 14,
-            'context_length': 77,
-            'vocab_size': 49408,
-            'transformer_width': 768,
-            'transformer_heads': 12,
-            'transformer_layers': 12
-        }
-        config['model']['params']['cond_stage_config']['params'] = {
-            'from_pretrained': False,
-            'clip_constructor_args': clip_args}
-        config['model']['params']['cond_stage_config']['target'] = '__main__.LazyFrozenCLIPImageEmbedder'
-
+    config = omegaconf.OmegaConf.load(config_path)
     with init_empty_weights():
         model = LatentDiffusion(**config['model']['params'])
-    # TODO: specify no_split_module_classes
-    model = load_checkpoint_and_dispatch(
-        model,
-        state_dict_path,
-        device_map={'': 0},
-        max_memory={0: '2GiB', 'cpu': '4GiB'},
-        offload_folder='/tmp'
-    )
+    model = load_checkpoint_and_dispatch(model, state_dict_path, **kwargs)
     return model
 
 
@@ -206,7 +98,6 @@ def sample_model(input_im, model, sampler, precision, h, w, ddim_steps, n_sample
             c = model.cc_projection(c)
             cond = {}
             cond['c_crossattn'] = [c]
-            c_concat = model.encode_first_stage((input_im.to(c.device))).mode().detach()
             cond['c_concat'] = [model.encode_first_stage((input_im.to(c.device))).mode().detach()
                                 .repeat(n_samples, 1, 1, 1)]
             if scale != 1.0:
@@ -405,14 +296,12 @@ def preprocess_image(models, input_im, preprocess, device):
     start_time = time.time()
 
     if preprocess:
-        hiinterface_to(models['carvekit'], device='cuda' if 'cuda' in device else 'cpu')
         input_im = load_and_preprocess(models['carvekit'], input_im)
-        hiinterface_to(models['carvekit'], 'cpu')
         input_im = (input_im / 255.0).astype(np.float32)
         # (H, W, 3) array in [0, 1].
 
     else:
-        input_im = input_im.resize([256, 256], Image.Resampling.LANCZOS)
+        input_im = input_im.resize([256, 256], Image.LANCZOS)
         input_im = np.asarray(input_im, dtype=np.float32) / 255.0
         # (H, W, 4) array in [0, 1].
 
@@ -444,11 +333,10 @@ def main_run(models, device, cam_vis, return_what,
     '''
     torch.cuda.empty_cache()
 
-    raw_im.thumbnail([1536, 1536], Image.Resampling.LANCZOS)
+    raw_im.thumbnail([1536, 1536], Image.LANCZOS)
     safety_checker_input = models['clip_fe'](raw_im, return_tensors='pt').to(device)
-    with device_switch(models['nsfw'], device, 'cpu') as nsfw:
-        (image, has_nsfw_concept) = nsfw(
-            images=np.ones((1, 3)), clip_input=safety_checker_input.pixel_values)
+    (image, has_nsfw_concept) = models['nsfw'](
+        images=np.ones((1, 3)), clip_input=safety_checker_input.pixel_values)
     print('has_nsfw_concept:', has_nsfw_concept)
     if np.any(has_nsfw_concept):
         print('NSFW content detected.')
@@ -524,7 +412,6 @@ def main_run(models, device, cam_vis, return_what,
             return (x, y, z, description, new_fig, show_in_im2, output_ims)
         else:
             return (description, new_fig, show_in_im2, output_ims)
-    torch.cuda.empty_cache()
 
 
 def calc_cam_cone_pts_3d(polar_deg, azimuth_deg, radius_m, fov_deg):
@@ -595,27 +482,23 @@ def calc_cam_cone_pts_3d(polar_deg, azimuth_deg, radius_m, fov_deg):
 
 def run_demo(
         device=None,
-        ckpt='105000.ckpt'):
-    #     print('sys.argv:', sys.argv)
-    #     if len(sys.argv) > 1:
-    #         print('old device_idx:', device_idx)
-    #         device_idx = int(sys.argv[1])
-    #         print('new device_idx:', device_idx)
+        ckpt='105000.ckpt',
+        device_map='auto'):
     if not device:
         device = f'cuda:{_GPU_INDEX}'
 
     # Instantiate all models beforehand for efficiency.
     models = dict()
     print('Instantiating LatentDiffusion...')
-
-    models['turncam'] = load_zero123_ld(state_dict_path=ckpt)
-    #     print('Instantiating Carvekit HiInterface...')
-    #     models['turncam'] = load_model_from_config('/kaggle/working/zero123/configs/sd-objaverse-finetune-c_concat-256.yaml', ckpt, device=device)
+    models['turncam'] = load_zero123_ld(
+        state_dict_path=ckpt,
+        device_map=device_map,
+        offload_folder='/tmp'
+    )
     models['carvekit'] = create_carvekit_interface()
     print('Instantiating StableDiffusionSafetyChecker...')
-    hiinterface_to(models['carvekit'], 'cpu')
     models['nsfw'] = StableDiffusionSafetyChecker.from_pretrained(
-        'CompVis/stable-diffusion-safety-checker')
+        'CompVis/stable-diffusion-safety-checker').to(device)
     print('Instantiating AutoFeatureExtractor...')
     models['clip_fe'] = AutoFeatureExtractor.from_pretrained(
         'CompVis/stable-diffusion-safety-checker')
@@ -631,20 +514,20 @@ def run_demo(
     models['nsfw'].concept_embeds_weights *= 1.07
     models['nsfw'].special_care_embeds_weights *= 1.07
 
-    with open('instructions.md', 'r') as f:
+    with open('zero123/zero123/instructions.md', 'r') as f:
         article = f.read()
 
     # NOTE: Examples must match inputs
     # [polar_slider, azimuth_slider, radius_slider, image_block,
     #  preprocess_chk, scale_slider, samples_slider, steps_slider].
-    #     example_fns = ['1_blue_arm.png', '2_cybercar.png', '3_sushi.png', '4_blackarm.png',
-    #                    '5_cybercar.png', '6_burger.png', '7_london.png', '8_motor.png']
-    #     num_examples = len(example_fns)
-    #     example_fps = [os.path.join(os.path.dirname(__file__), 'configs', x) for x in example_fns]
-    #     example_angles = [(-40.0, -65.0, 0.0), (-30.0, 90.0, 0.0), (45.0, -15.0, 0.0), (-75.0, 100.0, 0.0),
-    #                       (-40.0, -75.0, 0.0), (-45.0, 0.0, 0.0), (-55.0, 90.0, 0.0), (-20.0, 125.0, 0.0)]
-    #     examples_full = [[*example_angles[i], example_fps[i], True, 3, 4, 50] for i in range(num_examples)]
-    #     print('examples_full:', examples_full)
+#     example_fns = ['1_blue_arm.png', '2_cybercar.png', '3_sushi.png', '4_blackarm.png',
+#                    '5_cybercar.png', '6_burger.png', '7_london.png', '8_motor.png']
+#     num_examples = len(example_fns)
+#     example_fps = [os.path.join(os.path.dirname(__file__), 'configs', x) for x in example_fns]
+#     example_angles = [(-40.0, -65.0, 0.0), (-30.0, 90.0, 0.0), (45.0, -15.0, 0.0), (-75.0, 100.0, 0.0),
+#                       (-40.0, -75.0, 0.0), (-45.0, 0.0, 0.0), (-55.0, 90.0, 0.0), (-20.0, 125.0, 0.0)]
+#     examples_full = [[*example_angles[i], example_fps[i], True, 3, 4, 50] for i in range(num_examples)]
+#     print('examples_full:', examples_full)
 
     # Compose demo layout & data flow.
     demo = gr.Blocks(title=_TITLE)
@@ -655,6 +538,7 @@ def run_demo(
 
         with gr.Row():
             with gr.Column(scale=0.9, variant='panel'):
+
                 image_block = gr.Image(type='pil', image_mode='RGBA',
                                        label='Input image of single object')
                 preprocess_chk = gr.Checkbox(
@@ -700,6 +584,7 @@ def run_demo(
                     'The results will appear on the right.', visible=_SHOW_DESC)
 
             with gr.Column(scale=1.1, variant='panel'):
+
                 vis_output = gr.Plot(
                     label='Relationship between input (green) and output (blue) camera poses')
 
@@ -711,16 +596,16 @@ def run_demo(
 
         cam_vis = CameraVisualizer(vis_output)
 
-        #         gr.Examples(
-        #             examples=examples_full,  # NOTE: elements must match inputs list!
-        #             fn=partial(main_run, models, device, cam_vis, 'gen'),
-        #             inputs=[polar_slider, azimuth_slider, radius_slider,
-        #                     image_block, preprocess_chk,
-        #                     scale_slider, samples_slider, steps_slider],
-        #             outputs=[desc_output, vis_output, preproc_output, gen_output],
-        #             cache_examples=True,
-        #             run_on_click=True,
-        #         )
+#         gr.Examples(
+#             examples=examples_full,  # NOTE: elements must match inputs list!
+#             fn=partial(main_run, models, device, cam_vis, 'gen'),
+#             inputs=[polar_slider, azimuth_slider, radius_slider,
+#                     image_block, preprocess_chk,
+#                     scale_slider, samples_slider, steps_slider],
+#             outputs=[desc_output, vis_output, preproc_output, gen_output],
+#             cache_examples=True,
+#             run_on_click=True,
+#         )
 
         gr.Markdown(article)
 
@@ -781,10 +666,15 @@ def run_demo(
                                     0.0, 180.0, 0.0),
                          inputs=preset_inputs, outputs=preset_outputs)
 
-    demo.launch(enable_queue=True)
+    demo.launch(enable_queue=True, debug=True)
 
 
 if __name__ == '__main__':
-    # Note: specialized to run on a single GPU deviced.
-    #     run_demo(device=None, ckpt='/kaggle/input/zero-123-sharded-5gb')
-    run_demo(device=None, ckpt='/kaggle/working/zero123/zero123/105000.ckpt')
+    fire.Fire(
+        run_demo,
+        {
+            'device': None,
+            'ckpt': '/content/zero123-accelerate/checkpoints',
+            'device_map': omegaconf.OmegaConf.load('./config/device_map.yml')
+        }
+    )

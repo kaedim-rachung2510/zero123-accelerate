@@ -13,21 +13,24 @@ pin_and_add_path() {
   fi
 }
 
-
 # Add submodules to PYTHONPATH. Pin to specific commits.
 pin_and_add_path "taming-transformers" "3ba01b2"
 pin_and_add_path "CLIP" "a9b1bf5"
 pin_and_add_path "image-background-remove-tool" "2935e46"
+#
 pin_and_add_path "zero123" "78bc429"
-# An additional path, to get to the vendored ldm code
+# Path to the vendored ldm code on the original zero123 repo
 zero123_path=$(echo $PYTHONPATH | awk -F: '{print $NF}')
 export PYTHONPATH="${PYTHONPATH}:${zero123_path}/zero123"
 
-
-# A single requirements file for all the submodules
+# One requirements file to rule them all
 pip install -r requirements.txt
 
-# Patching zero123's ldm source to work with bumped lightning - don't fork or vendor for a single line of change
-(cd ./zero123/zero123/ldm/models/diffusion && patch < ../../../../../patches/ldm.patch)
+# Patching existing code - don't fork or vendor to change just a couple of lines of code
+#
+# make zero123's ldm source compatible with newer versions of lightning
+(cd ./zero123/zero123/ldm/models/diffusion && patch < ../../../../../patches/ldm_ddpm.patch)
+# compatibility with newer PIL
+(cd ./zero123/zero123/ldm/models/diffusion && patch < ../../../../../patches/ldm_util.patch)
 
 echo $PYTHONPATH
