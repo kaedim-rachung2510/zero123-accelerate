@@ -5,3 +5,5 @@
 For an overall reduced memory footprint, inference is done with [Accelerate](https://huggingface.co/docs/accelerate/), using sharded checkpoints of the underlying large-scale diffusion model.
 
 [Colab notebook](https://colab.research.google.com/drive/1iNpZqSlu8SMaDMVXLxp8a6jtwPB7LsUJ)
+
+[Sharded model checkpoints](https://huggingface.co/learningdisorder/zero123/tree/main)
