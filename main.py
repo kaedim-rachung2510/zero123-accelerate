@@ -1,3 +1,10 @@
+import sys
+sys.path.append("/content/zero123-accelerate/taming-transformers")
+sys.path.append("/content/zero123-accelerate/CLIP")
+sys.path.append("/content/zero123-accelerate/image-background-remove-tool")
+sys.path.append("/content/zero123-accelerate/zero123")
+sys.path.append("/content/zero123-accelerate/zero123/zero123")
+
 from accelerate import init_empty_weights, load_checkpoint_and_dispatch
 import math
 import os
@@ -15,8 +22,6 @@ from torch import autocast
 from torchvision import transforms
 
 from ldm.models.diffusion.ddpm import LatentDiffusion
-
-from rembg import remove
 
 _GPU_INDEX = 0
 
@@ -116,7 +121,7 @@ def main_run(models, device,
     torch.cuda.empty_cache()
 
     raw_im.thumbnail([1536, 1536], Image.LANCZOS)
-    input_im = preprocess_image(models, raw_im, preprocess, device)
+    input_im = preprocess_image(models, raw_im, preprocess)
 
     print(x,y,z)
 
@@ -170,16 +175,19 @@ def init(device=None,
 #         ckpt="/content/zero123-accelerate/checkpoints",
 #         device_map="./config/device_map.yml"
 #         )
-#     path = ""
+#     path = "perspective-table.jpg"
 #     img = Image.open(path)
 #     if img.mode != "RGBA":
 #         img = remove(img)
-#     main_run(
+#     output_ims = main_run(
 #         models=models,
 #         device=device,
-#         x=0.0, y=0.0, z=0.0,
+#         x=0.0, y=30.0, z=0.0,
 #         raw_im=img,
 #         preprocess=True,
 #         scale=3.0, n_samples=4, ddim_steps=50, ddim_eta=1.0,
 #         precision='fp32', h=256, w=256
 #     )
+#     for im in output_ims:
+#         plt.imshow(im)
+#         plt.show()
