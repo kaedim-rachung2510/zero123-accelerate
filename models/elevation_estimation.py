@@ -51,7 +51,7 @@ class ElevationEstimation():
         for pair in itertools.combinations(range(len(self.images)), 2):
             i1, i2 = pair
             matched_features[pair] = self.feature_matching(self.images[i1], self.images[i2])
-        print("Done")
+        print("Done.")
 
         # Iterate through rough elevation candidates
         errors_for_each_elevation = []
@@ -86,7 +86,7 @@ class ElevationEstimation():
         for img in self.images:
             os.remove(img)
 
-        return best_rough_elevation
+        return best_elevation
 
     def feature_matching(self, img_name1, img_name2, plot=False):
         img1 = K.io.load_image(img_name1, K.io.ImageLoadType.RGB32)[None, ...]
@@ -102,8 +102,14 @@ class ElevationEstimation():
 
         mkpts0 = correspondences["keypoints0"].cpu().numpy()
         mkpts1 = correspondences["keypoints1"].cpu().numpy()
-        Fm, inliers = cv2.findFundamentalMat(mkpts0, mkpts1, cv2.USAC_MAGSAC, 0.5, 0.999, 100000)
-        inliers = inliers > 0
+
+        # sometimes cv2 throws assertion error
+        try:
+            Fm, inliers = cv2.findFundamentalMat(mkpts0, mkpts1, cv2.USAC_MAGSAC, 0.5, 0.99, 100000)
+            inliers = inliers > 0
+        except:
+            print(len(mkpts0), len(mkpts1))
+            return mkpts0.astype(int), mkpts1.astype(int)
 
         if plot:
             draw_LAF_matches(
