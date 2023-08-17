@@ -140,8 +140,8 @@ def main_run(models, device,
     input_im = transforms.functional.resize(input_im, [h, w])
 
     sampler = DDIMSampler(models['turncam'])
-    # used_x = -x  # NOTE: Polar makes more sense in Basile's opinion this way!
-    used_x = x  # NOTE: Set this way for consistency.
+    used_x = -x  # NOTE: Polar makes more sense in Basile's opinion this way!
+    # used_x = x  # NOTE: Set this way for consistency.
     x_samples_ddim = sample_model(input_im, models['turncam'], sampler, precision, h, w,
                                     ddim_steps, n_samples, scale, ddim_eta, used_x, y, z, verbose=verbose)
 
