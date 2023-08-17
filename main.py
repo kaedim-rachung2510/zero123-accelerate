@@ -38,7 +38,7 @@ def load_zero123_ld(
 
 @torch.no_grad()
 def sample_model(input_im, model, sampler, precision, h, w, ddim_steps, n_samples, scale,
-                 ddim_eta, x, y, z):
+                 ddim_eta, x, y, z, verbose=False):
     precision_scope = autocast if precision == 'autocast' else nullcontext
     with precision_scope('cuda'):
         with model.ema_scope():
@@ -69,18 +69,19 @@ def sample_model(input_im, model, sampler, precision, h, w, ddim_steps, n_sample
                                              unconditional_conditioning=uc,
                                              eta=ddim_eta,
                                              x_T=None)
-            print(samples_ddim.shape)
+            if verbose:
+                print(samples_ddim.shape)
             # samples_ddim = torch.nn.functional.interpolate(samples_ddim, 64, mode='nearest', antialias=False)
             x_samples_ddim = model.decode_first_stage(samples_ddim)
             return torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0).cpu()
 
-def preprocess_image(models, input_im, preprocess):
+def preprocess_image(models, input_im, preprocess, verbose=False):
     '''
     :param input_im (PIL Image).
     :return input_im (H, W, 3) array in [0, 1].
     '''
-
-    print('old input_im:', input_im.size)
+    if verbose:
+        print('old input_im:', input_im.size)
     start_time = time.time()
 
     if preprocess:
@@ -105,8 +106,9 @@ def preprocess_image(models, input_im, preprocess):
         input_im = input_im[:, :, 0:3]
         # (H, W, 3) array in [0, 1].
 
-    print(f'Infer foreground mask (preprocess_image) took {time.time() - start_time:.3f}s.')
-    print('new input_im:', lo(input_im))
+    if verbose:
+        print(f'Infer foreground mask (preprocess_image) took {time.time() - start_time:.3f}s.')
+        print('new input_im:', lo(input_im))
 
     return input_im
 
@@ -114,16 +116,18 @@ def main_run(models, device,
              x=0.0, y=0.0, z=0.0,
              raw_im=None, preprocess=True,
              scale=3.0, n_samples=4, ddim_steps=50, ddim_eta=1.0,
-             precision='fp32', h=256, w=256):
+             precision='fp32', h=256, w=256,
+             verbose=False):
     '''
     :param raw_im (PIL Image).
     '''
     torch.cuda.empty_cache()
 
     raw_im.thumbnail([1536, 1536], Image.LANCZOS)
-    input_im = preprocess_image(models, raw_im, preprocess)
+    input_im = preprocess_image(models, raw_im, preprocess, verbose=verbose)
 
-    print(x,y,z)
+    if verbose:
+        print(x,y,z)
 
     # show_in_im1 = (input_im * 255.0).astype(np.uint8)
     # cam_vis.polar_change(x)
@@ -139,7 +143,7 @@ def main_run(models, device,
     # used_x = -x  # NOTE: Polar makes more sense in Basile's opinion this way!
     used_x = x  # NOTE: Set this way for consistency.
     x_samples_ddim = sample_model(input_im, models['turncam'], sampler, precision, h, w,
-                                    ddim_steps, n_samples, scale, ddim_eta, used_x, y, z)
+                                    ddim_steps, n_samples, scale, ddim_eta, used_x, y, z, verbose=verbose)
 
     output_ims = []
     for x_sample in x_samples_ddim:
