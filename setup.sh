@@ -32,5 +32,7 @@ pip install -r requirements.txt
 (cd ./zero123/zero123/ldm/models/diffusion && patch < ../../../../../patches/ldm_ddpm.patch)
 # Compatibility with newer PIL
 (cd ./zero123/zero123/ldm && patch < ../../../patches/ldm_util.patch)
+# Make DDIM quiet
+(cd ./zero123/zero123/ldm/models/diffusion && patch < ../../../../../patches/ldm_ddim_verbose.patch)
 
 echo $PYTHONPATH
