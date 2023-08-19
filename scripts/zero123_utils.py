@@ -37,7 +37,7 @@ def camera_pose(eye, front, up):
 
 def compute_extrinsics(elevation_rad, azimuth_rad, radius):
     # elevation_rad += 1e-10
-    azimuth_rad = np.pi - azimuth_rad
+    # azimuth_rad = np.pi - azimuth_rad
     e = np.array([
         radius * np.cos(elevation_rad) * np.cos(azimuth_rad),
         radius * np.cos(elevation_rad) * np.sin(azimuth_rad),
