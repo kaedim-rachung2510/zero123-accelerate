@@ -184,7 +184,7 @@ class ElevationEstimation():
         Taken from https://stackoverflow.com/questions/55740284/how-to-triangulate-a-point-in-3d-space-given-coordinate-points-in-2-image-and-e
         """
         # Get intrinsic matrices
-        M = compute_intrinsics(self.fov, self.img_size)
+        M = compute_intrinsics(self.img_size, self.fov)
 
         elevation1_rad, azimuth1_rad = self.get_angles_in_rad(elevation1, azimuth1)
         camera1_A = compute_extrinsics(elevation1_rad, azimuth1_rad, radius1)
@@ -201,7 +201,7 @@ class ElevationEstimation():
     
     def project_3d_to_image(self, point_3d, elevation3, azimuth3, radius3):
 
-        camera3_M = compute_intrinsics(self.fov, self.img_size)
+        camera3_M = compute_intrinsics(self.img_size, self.fov)
 
         elevation3_rad, azimuth3_rad = self.get_angles_in_rad(elevation3, azimuth3)
         camera3_A = compute_extrinsics(elevation3_rad, azimuth3_rad, radius3)
