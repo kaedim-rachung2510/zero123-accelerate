@@ -21,7 +21,7 @@ class ElevationEstimation():
                  radius=2.5,
                  image_dir=".", 
                  max_size=320,
-                 actual_spherical_coordinates=(0,0)
+                 show_elevation_plots=[0]
                  ):
         self.matcher = KF.LoFTR(pretrained="indoor_new")
 
@@ -38,7 +38,7 @@ class ElevationEstimation():
         self.fov = fov
         self.radius = radius
         self.spherical_coordinates = [(*k, self.radius) for k in spherical_coordinates]
-        self.actual_elevation, self.actual_azimuth = actual_spherical_coordinates
+        self.show_elevations = show_elevation_plots
 
     # Main function
     def estimate_elevation(self, elevation_range=range(-30, 31, 10), plot=False, verbose=False):
@@ -233,7 +233,7 @@ class ElevationEstimation():
                 error += self.l1_norm(points[c2], projected_point)
                 projected_points.append(projected_point)
             if plot and (c0,c1,c2) == (0,1,2):
-                self.plot_projected_points(plot, matching_keypoints, np.array(projected_points))
+                self.plot_projected_points(plot, matching_keypoints, np.array(projected_points), adjusted_spherical_coordinates)
         mean_error = error / len(matching_keypoints)
         return mean_error
     
@@ -260,7 +260,7 @@ class ElevationEstimation():
             # triangulate, project and calculate error
             triplet_spherical_coordinates = (adjusted_spherical_coordinates[i1], adjusted_spherical_coordinates[i2], adjusted_spherical_coordinates[i3])
             # print(f"{triplet}: {triplet_spherical_coordinates}")
-            if plot and triplet == (0,1,2) and estimated_elevation == self.actual_elevation:
+            if plot and triplet == (0,1,2) and estimated_elevation in self.show_elevations:
                 # print(triplet_spherical_coordinates)
                 reprojection_error = self.calculate_mean_reprojection_error(matching_keypoints, triplet_spherical_coordinates, plot=triplet)
             else:
@@ -298,16 +298,16 @@ class ElevationEstimation():
 
         return np.sum(errors)
     
-    def plot_projected_points(self, triplet, matched_keypoints, projected_points):
+    def plot_projected_points(self, triplet, matched_keypoints, projected_points, spherical_coordinates):
         plt.figure(figsize=(12,5))
         for i in range(3):
             plt.subplot(1,4,i+1, xticks=[], yticks=[])
             plt.imshow(Image.open(self.images[triplet[i]]))
-        plt.subplot(1,4,1); plt.title("a")
-        plt.subplot(1,4,2); plt.title("b")
-        plt.subplot(1,4,3); plt.title("LoFTR match")
+        plt.subplot(1,4,1); plt.title("a\n$\\theta=$%.0f, $\phi=$%.0f" % spherical_coordinates[0][:2])
+        plt.subplot(1,4,2); plt.title("b\n$\\theta=$%.0f, $\phi=$%.0f" % spherical_coordinates[1][:2])
+        plt.subplot(1,4,3); plt.title("LoFTR match\n$\\theta=$%.0f, $\phi=$%.0f" % spherical_coordinates[2][:2])
         plt.subplot(1,4,4, xticks=[], yticks=[])
-        plt.title("Reprojection")
+        plt.title("Reprojection\n$\\theta=$%.0f, $\phi=$%.0f" % spherical_coordinates[2][:2]")
         plt.imshow(Image.open(self.images[triplet[2]]))
         
         n = 10
