@@ -307,7 +307,7 @@ class ElevationEstimation():
         plt.subplot(1,4,2); plt.title("b\n$\\theta=$%.0f, $\phi=$%.0f" % spherical_coordinates[1][:2])
         plt.subplot(1,4,3); plt.title("LoFTR match\n$\\theta=$%.0f, $\phi=$%.0f" % spherical_coordinates[2][:2])
         plt.subplot(1,4,4, xticks=[], yticks=[])
-        plt.title("Reprojection\n$\\theta=$%.0f, $\phi=$%.0f" % spherical_coordinates[2][:2]")
+        plt.title("Reprojection\n$\\theta=$%.0f, $\phi=$%.0f" % spherical_coordinates[2][:2])
         plt.imshow(Image.open(self.images[triplet[2]]))
         
         n = 10
