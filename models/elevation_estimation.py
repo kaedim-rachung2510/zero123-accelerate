@@ -14,6 +14,16 @@ from scripts.utils import *
 from scripts.zero123_utils import *
 
 class ElevationEstimation():
+    """
+    Implements the elevation estimation section of One-2-3-45: Any Single Image to 3D Mesh in 45 Seconds without Per-Shape Optimization.
+    1. Is initiated with the 4 nearby views of an image and the specified relative spherical coordinates.
+    2. Finds matching features between each pair (6 total) using LoFTR.
+    3. For each triplet of images (4 total), triangulate the matched coordinates from 2 images to a 3D point,
+    4. then project the predicted 3D point back to the 3rd image and calculate the reprojection error (L1 norm).
+    5. Iterate roughly through a range of elevation angles (step of 10) to find the rough angle with least reprojection error.
+    6. Iterate finely through a range around the best rough angle (angle-5 to angle+5) to find the angle with least reprojection error.
+    """
+
     def __init__(self, 
                  spherical_coordinates, 
                  image_paths, 
@@ -24,6 +34,8 @@ class ElevationEstimation():
                  actual_spherical_coordinates=(0,0),
                  show_plot_angles=[]
                  ):
+        """
+        """
         self.matcher = KF.LoFTR(pretrained="indoor_new")
 
         self.images = []
@@ -54,7 +66,7 @@ class ElevationEstimation():
             i1, i2 = pair
             matched_features[pair] = self.feature_matching(self.images[i1], self.images[i2])
         if verbose:
-            print(f"Done. Total matches = {np.sum([len(k[0]) for k in matched_features])}")
+            print(f"Done. Total matches = {np.sum([len(k[0]) for k in matched_features.values()])}")
 
         # Iterate through rough elevation candidates
         errors_for_each_elevation = []
