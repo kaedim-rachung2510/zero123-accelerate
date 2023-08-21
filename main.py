@@ -137,7 +137,7 @@ def main_run(models, device,
 
     input_im = transforms.ToTensor()(input_im).unsqueeze(0).to(device)
     input_im = input_im * 2 - 1
-    input_im = transforms.functional.resize(input_im, [h, w])
+    input_im = transforms.functional.resize(input_im, [h, w], antialias=True)
 
     sampler = DDIMSampler(models['turncam'])
     used_x = -x  # NOTE: Polar makes more sense in Basile's opinion this way!
