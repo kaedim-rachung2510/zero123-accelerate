@@ -20,8 +20,9 @@ class ElevationEstimation():
                  fov=50.0,
                  radius=2.5,
                  image_dir=".", 
-                 max_size=320,
-                 show_elevation_plots=[0]
+                 max_size=256,
+                 actual_spherical_coordinates=(0,0),
+                 show_plot_angles=[]
                  ):
         self.matcher = KF.LoFTR(pretrained="indoor_new")
 
@@ -38,49 +39,52 @@ class ElevationEstimation():
         self.fov = fov
         self.radius = radius
         self.spherical_coordinates = [(*k, self.radius) for k in spherical_coordinates]
-        self.show_elevations = show_elevation_plots
+        self.show_plot_angles = show_plot_angles
 
     # Main function
-    def estimate_elevation(self, elevation_range=range(-30, 31, 10), plot=False, verbose=False):
+    def estimate_elevation(self, elevation_range=range(-30, 31, 10), verbose=False):
 
         tic = time.time()
 
         # Iterate through all image pairs (for feature matching) and image triplets (for reprojection)
-        print(f"Feature matching...", end="")
+        if verbose:
+            print(f"Feature matching...", end="")
         matched_features = {}
         for pair in itertools.combinations(range(len(self.images)), 2):
             i1, i2 = pair
             matched_features[pair] = self.feature_matching(self.images[i1], self.images[i2])
-        print("Done.")
+        if verbose:
+            print(f"Done. Total matches = {np.sum([len(k[0]) for k in matched_features])}")
 
         # Iterate through rough elevation candidates
         errors_for_each_elevation = []
         for elevation in elevation_range:
-            error = self.calculate_total_error_for_elevation(matched_features, elevation, plot=plot)
+            error = self.calculate_total_error_for_elevation(matched_features, elevation)
             errors_for_each_elevation.append(error)
 
         sorted_indices = np.argsort(errors_for_each_elevation)
         best_rough_elevation = elevation_range[sorted_indices[0]]
-        print(f"Best rough elevation = {best_rough_elevation}")
         if verbose:
-            print()
+            print(f"Best rough angle = {best_rough_elevation}\n")
             for ind in sorted_indices[:15]:
                 print(f"{elevation_range[ind]}: {errors_for_each_elevation[ind]}")
             print()
 
         # Iterate through fine elevation candidates
         errors_for_each_elevation = []
-        fine_elevation_range = [best_rough_elevation-5, best_rough_elevation, best_rough_elevation+5]
+        fine_elevation_range = range(best_rough_elevation-5, best_rough_elevation+6)
         for elevation in fine_elevation_range:
-            error = self.calculate_total_error_for_elevation(matched_features, elevation, plot=plot)
+            error = self.calculate_total_error_for_elevation(matched_features, elevation)
             errors_for_each_elevation.append(error)
 
         sorted_indices = np.argsort(errors_for_each_elevation)
         best_elevation = fine_elevation_range[sorted_indices[0]]
-        print(f"Best elevation = {best_elevation}")
+        if verbose:
+            print(f"Best angle = {best_elevation}")
 
         toc = time.time()
-        print(f"Elapsed time: {(toc-tic):.2f}s")
+        if verbose:
+            print(f"Elapsed time: {(toc-tic):.2f}s")
 
         # delete saved image files
         for img in self.images:
@@ -240,8 +244,7 @@ class ElevationEstimation():
     def calculate_total_error_for_elevation(
             self,
             matched_features,
-            estimated_elevation,
-            plot=False
+            estimated_elevation
         ):  
         adjusted_spherical_coordinates = self.adjust_elevation(self.spherical_coordinates, estimated_elevation)
         errors = []
@@ -253,44 +256,15 @@ class ElevationEstimation():
             keypoints23 = matched_features[(i2,i3)]
 
             # get common keypoints between all three images
-            matching_keypoints = self.find_all_matching_keypoints(keypoints12, keypoints13, keypoints23, max_dist=np.min(self.img_size)*0.03)
-            # random_inds = np.random.choice(range(len(matching_keypoints)), 50)
-            # matching_keypoints = matching_keypoints[random_inds]
+            matching_keypoints = self.find_all_matching_keypoints(keypoints12, keypoints13, keypoints23, max_dist=np.min(self.img_size)*0.01)
+            random_inds = np.random.choice(range(len(matching_keypoints)), 50)
+            matching_keypoints = matching_keypoints[random_inds]
 
             # triangulate, project and calculate error
             triplet_spherical_coordinates = (adjusted_spherical_coordinates[i1], adjusted_spherical_coordinates[i2], adjusted_spherical_coordinates[i3])
             # print(f"{triplet}: {triplet_spherical_coordinates}")
-            if plot and triplet == (0,1,2) and estimated_elevation in self.show_elevations:
+            if triplet == (0,1,2) and estimated_elevation in self.show_plot_angles:
                 # print(triplet_spherical_coordinates)
-                reprojection_error = self.calculate_mean_reprojection_error(matching_keypoints, triplet_spherical_coordinates, plot=triplet)
-            else:
-                reprojection_error = self.calculate_mean_reprojection_error(matching_keypoints, triplet_spherical_coordinates)
-            errors.append(reprojection_error)
-
-        return np.sum(errors)
-    
-    def calculate_total_error_for_azimuth(
-            self,
-            matched_features,
-            estimated_azimuth,
-            plot=False
-        ):  
-        adjusted_spherical_coordinates = self.adjust_azimuth(self.spherical_coordinates, estimated_azimuth)
-        errors = []
-        for triplet in itertools.combinations(range(len(self.images)), 3):
-            i1,i2,i3 = triplet
-            # get matched keypoints between each pair in the tripley group
-            keypoints12 = matched_features[(i1,i2)]
-            keypoints13 = matched_features[(i1,i3)]
-            keypoints23 = matched_features[(i2,i3)]
-
-            # get common keypoints between all three images
-            matching_keypoints = self.find_all_matching_keypoints(keypoints12, keypoints13, keypoints23, max_dist=np.min(self.img_size)*0.03)
-
-            # triangulate, project and calculate error
-            triplet_spherical_coordinates = (adjusted_spherical_coordinates[i1], adjusted_spherical_coordinates[i2], adjusted_spherical_coordinates[i3])
-            # print(f"{triplet}: {triplet_spherical_coordinates}")
-            if plot and triplet == (0,1,2) and estimated_azimuth == self.actual_azimuth:
                 reprojection_error = self.calculate_mean_reprojection_error(matching_keypoints, triplet_spherical_coordinates, plot=triplet)
             else:
                 reprojection_error = self.calculate_mean_reprojection_error(matching_keypoints, triplet_spherical_coordinates)
