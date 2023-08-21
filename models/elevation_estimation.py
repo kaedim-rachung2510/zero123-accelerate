@@ -26,10 +26,11 @@ class ElevationEstimation():
 
     def __init__(self, 
                  spherical_coordinates, 
-                 image_paths, 
+                 images,
                  fov=50.0,
                  radius=2.5,
-                 image_dir=".", 
+                 image_dir=".",
+                 image_prefix="e",
                  max_size=256,
                  actual_spherical_coordinates=(0,0),
                  show_plot_angles=[]
@@ -39,12 +40,12 @@ class ElevationEstimation():
         self.matcher = KF.LoFTR(pretrained="indoor_new")
 
         self.images = []
-        for i,file in enumerate(image_paths):
-            img = Image.open(file)
+        os.makedirs(image_dir, exist_ok=True)
+        for i,img in enumerate(images):
             img = convert_to_rgb(img)
             img = Image.fromarray(crop_to_square(np.array(img), size=max_size))
             self.img_size = img.size
-            filename = os.path.join(image_dir, f"{i}.jpg")
+            filename = os.path.join(image_dir, f"{image_prefix}{i}.jpg")
             img.save(filename)
             self.images.append(filename)
 
@@ -95,8 +96,8 @@ class ElevationEstimation():
             print(f"Best angle = {best_elevation}")
 
         toc = time.time()
-        if verbose:
-            print(f"Elapsed time: {(toc-tic):.2f}s")
+        # if verbose:
+        print(f"Elapsed time: {(toc-tic):.2f}s")
 
         # delete saved image files
         for img in self.images:
