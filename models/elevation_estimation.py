@@ -37,7 +37,8 @@ class ElevationEstimation():
                  ):
         """
         """
-        self.matcher = KF.LoFTR(pretrained="indoor_new")
+        self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        self.matcher = KF.LoFTR(pretrained="indoor_new").to(self.device)
 
         self.images = []
         os.makedirs(image_dir, exist_ok=True)
@@ -110,8 +111,8 @@ class ElevationEstimation():
         img2 = K.io.load_image(img_name2, K.io.ImageLoadType.RGB32)[None, ...]
 
         input_dict = {
-            "image0": K.color.rgb_to_grayscale(img1),  # LofTR works on grayscale images only
-            "image1": K.color.rgb_to_grayscale(img2),
+            "image0": K.color.rgb_to_grayscale(img1).to(self.device),  # LofTR works on grayscale images only
+            "image1": K.color.rgb_to_grayscale(img2).to(self.device),
         }
 
         with torch.inference_mode():
