@@ -31,20 +31,15 @@ class ElevationEstimation():
                  radius=2.5,
                  image_dir=".",
                  image_prefix="e",
-                 max_size=256,
-                 actual_spherical_coordinates=(0,0),
                  show_plot_angles=[]
                  ):
-        """
-        """
+
         self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         self.matcher = KF.LoFTR(pretrained="indoor_new").to(self.device)
 
         self.images = []
         os.makedirs(image_dir, exist_ok=True)
         for i,img in enumerate(images):
-            img = convert_to_rgb(img)
-            img = Image.fromarray(crop_to_square(np.array(img), size=max_size))
             self.img_size = img.size
             filename = os.path.join(image_dir, f"{image_prefix}{i}.jpg")
             img.save(filename)
@@ -78,23 +73,24 @@ class ElevationEstimation():
 
         sorted_indices = np.argsort(errors_for_each_elevation)
         best_rough_elevation = elevation_range[sorted_indices[0]]
+        print(f"Best rough angle = {best_rough_elevation}")
         if verbose:
-            print(f"Best rough angle = {best_rough_elevation}\n")
+            print()
             for ind in sorted_indices[:15]:
                 print(f"{elevation_range[ind]}: {errors_for_each_elevation[ind]}")
             print()
 
         # Iterate through fine elevation candidates
         errors_for_each_elevation = []
-        fine_elevation_range = range(best_rough_elevation-5, best_rough_elevation+6)
+        fine_elevation_range = range(best_rough_elevation-5, best_rough_elevation+6, 1)
         for elevation in fine_elevation_range:
             error = self.calculate_total_error_for_elevation(matched_features, elevation)
             errors_for_each_elevation.append(error)
 
         sorted_indices = np.argsort(errors_for_each_elevation)
         best_elevation = fine_elevation_range[sorted_indices[0]]
-        if verbose:
-            print(f"Best angle = {best_elevation}")
+        # if verbose:
+        print(f"Best angle = {best_elevation}")
 
         toc = time.time()
         # if verbose:
@@ -107,8 +103,16 @@ class ElevationEstimation():
         return best_elevation
 
     def feature_matching(self, img_name1, img_name2, plot=False):
-        img1 = K.io.load_image(img_name1, K.io.ImageLoadType.RGB32)[None, ...]
-        img2 = K.io.load_image(img_name2, K.io.ImageLoadType.RGB32)[None, ...]
+
+        def load_image(file):
+            img = Image.open(file)
+            img = (np.array(img)/255).astype(np.float32)
+            return K.image_to_tensor(img).unsqueeze(0)
+            
+        img1 = load_image(img_name1)
+        img2 = load_image(img_name2)
+        # img1 = K.io.load_image(img_name1, K.io.ImageLoadType.RGB32)[None, ...]
+        # img2 = K.io.load_image(img_name2, K.io.ImageLoadType.RGB32)[None, ...]
 
         input_dict = {
             "image0": K.color.rgb_to_grayscale(img1).to(self.device),  # LofTR works on grayscale images only
@@ -270,9 +274,10 @@ class ElevationEstimation():
             keypoints23 = matched_features[(i2,i3)]
 
             # get common keypoints between all three images
-            matching_keypoints = self.find_all_matching_keypoints(keypoints12, keypoints13, keypoints23, max_dist=np.min(self.img_size)*0.01)
-            random_inds = np.random.choice(range(len(matching_keypoints)), 50)
-            matching_keypoints = matching_keypoints[random_inds]
+            matching_keypoints = self.find_all_matching_keypoints(keypoints12, keypoints13, keypoints23, max_dist=np.min(self.img_size)*0.03)
+            if len(matching_keypoints) > 100:
+                random_inds = np.random.choice(range(len(matching_keypoints)), 100)
+                matching_keypoints = matching_keypoints[random_inds]
 
             # triangulate, project and calculate error
             triplet_spherical_coordinates = (adjusted_spherical_coordinates[i1], adjusted_spherical_coordinates[i2], adjusted_spherical_coordinates[i3])

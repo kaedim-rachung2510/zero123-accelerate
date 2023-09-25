@@ -1,9 +1,9 @@
 import sys
-sys.path.append("/content/zero123-accelerate/taming-transformers")
-sys.path.append("/content/zero123-accelerate/CLIP")
-sys.path.append("/content/zero123-accelerate/image-background-remove-tool")
-sys.path.append("/content/zero123-accelerate/zero123")
-sys.path.append("/content/zero123-accelerate/zero123/zero123")
+sys.path.append("./taming-transformers")
+sys.path.append("./CLIP")
+sys.path.append("./image-background-remove-tool")
+# sys.path.append("./zero123")
+sys.path.append("./zero123/zero123")
 
 from accelerate import init_empty_weights, load_checkpoint_and_dispatch
 import math
@@ -22,6 +22,8 @@ from torch import autocast
 from torchvision import transforms
 
 from ldm.models.diffusion.ddpm import LatentDiffusion
+
+from scripts.utils import convert_to_rgb
 
 _GPU_INDEX = 0
 
@@ -124,16 +126,13 @@ def main_run(models, device,
     torch.cuda.empty_cache()
 
     raw_im.thumbnail([1536, 1536], Image.LANCZOS)
-    input_im = preprocess_image(models, raw_im, preprocess, verbose=verbose)
+    if raw_im.mode == "RGBA":
+        input_im = np.array(convert_to_rgb(raw_im))
+    else:
+        input_im = preprocess_image(models, raw_im, preprocess, verbose=verbose)
 
     if verbose:
         print(x,y,z)
-
-    # show_in_im1 = (input_im * 255.0).astype(np.uint8)
-    # cam_vis.polar_change(x)
-    # cam_vis.azimuth_change(y)
-    # cam_vis.radius_change(z)
-    # cam_vis.encode_image(show_in_im1)
 
     input_im = transforms.ToTensor()(input_im).unsqueeze(0).to(device)
     input_im = input_im * 2 - 1
@@ -173,25 +172,30 @@ def init(device=None,
     models['carvekit'] = create_carvekit_interface()
     return models, device
 
+def generate_view_from_pose(models, device, img, elevation=0, azimuth=0, n_samples=4, ddim_steps=30):
+    if type(img) == str:
+        img = Image.open(img)
 
-# if __name__ == '__main__':
-#     models, device = init(
-#         ckpt="/content/zero123-accelerate/checkpoints",
-#         device_map="./config/device_map.yml"
-#         )
-#     path = "perspective-table.jpg"
-#     img = Image.open(path)
-#     if img.mode != "RGBA":
-#         img = remove(img)
-#     output_ims = main_run(
-#         models=models,
-#         device=device,
-#         x=0.0, y=30.0, z=0.0,
-#         raw_im=img,
-#         preprocess=True,
-#         scale=3.0, n_samples=4, ddim_steps=50, ddim_eta=1.0,
-#         precision='fp32', h=256, w=256
-#     )
-#     for im in output_ims:
-#         plt.imshow(im)
-#         plt.show()
+    output_ims = main_run(
+        models=models,
+        device=device,
+        x=elevation, y=azimuth, z=0.0,
+        raw_im=img,
+        preprocess=True,
+        scale=3.0, n_samples=n_samples, ddim_steps=ddim_steps, ddim_eta=1.0,
+        precision='fp32', h=256, w=256,
+        verbose=False
+    )
+    return img, output_ims
+
+def generate_nearby_views(model, device, img, spherical_coordinates, ddim_steps=30):
+    # Generate nearby views
+    print("Generating nearby views...", end="")
+    nearby_views = []
+    tic = time.time()
+    for elevation, azimuth in spherical_coordinates:
+        _, output_ims = generate_view_from_pose(model, device, img, elevation, azimuth, n_samples=1, ddim_steps=ddim_steps)
+        nearby_views.append(output_ims[0])
+    toc = time.time()
+    print(f"Done. Time taken: {(toc-tic):.2f}s")
+    return nearby_views
