@@ -5,8 +5,8 @@ import os
 
 class ImageUtils():
 
-    access_id = "AKIAYFBUHX5MV634PO77"
-    access_key = "kUPOe9Xjc441j/0aneRYSu2I/VbLuDlEn+T5Ohyh"
+    access_id = os.environ.get("AWS_KEY_ID")
+    access_key = os.environ.get("AWS_SECRET_KEY")
 
     @staticmethod
     def plot_subplots(images, titles=[], n_cols=4, fig_size=0):
